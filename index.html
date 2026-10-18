@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b3fa0">
+<title>Cronómetro con silbato</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --court: #1b3fa0;
+    --court-dark: #12296b;
+    --chalk: #f5f7ff;
+    --whistle: #ff5a1f;
+    --ink: #0a1a4d;
+    --display: "Barlow Condensed", "Arial Narrow", Impact, sans-serif;
+    --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--court);
+    color: var(--chalk);
+    font-family: var(--body);
+    font-weight: 500;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    display: flex;
+    justify-content: center;
+    transition: background .3s;
+  }
+  body.done { background: var(--whistle); }
+  main {
+    width: 100%;
+    max-width: 480px;
+    padding: 20px 20px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 1.6rem;
+    margin: 0;
+    letter-spacing: .01em;
+  }
+
+  /* Círculo central de la cancha */
+  .court {
+    position: relative;
+    width: min(86vw, 380px);
+    aspect-ratio: 1;
+    margin: 0 auto;
+  }
+  .court svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .court .track { fill: none; stroke: rgba(245,247,255,.28); stroke-width: 4; }
+  .court .progress {
+    fill: none; stroke: var(--chalk); stroke-width: 10; stroke-linecap: round;
+    transition: stroke-dashoffset .12s linear;
+  }
+  body.done .court .track { stroke: rgba(10,26,77,.3); }
+  body.done .court .progress { stroke: var(--ink); }
+  .readout {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .time {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: clamp(5rem, 28vw, 8.5rem);
+    line-height: .95;
+    font-variant-numeric: tabular-nums;
+  }
+  .status { font-size: 1.05rem; opacity: .85; min-height: 1.4em; }
+  body.done .time, body.done .status { color: var(--ink); }
+  body.done .time { animation: pulse .5s ease-in-out 3; }
+  @keyframes pulse { 50% { transform: scale(1.06); } }
+
+  .setter { display: flex; align-items: flex-end; justify-content: center; gap: 12px; }
+  .setter label { display: flex; flex-direction: column; gap: 4px; font-size: .95rem; }
+  .setter input {
+    width: 104px; height: 64px;
+    font-family: var(--display); font-weight: 800; font-size: 2.4rem; text-align: center;
+    color: var(--ink); background: var(--chalk);
+    border: 0; border-radius: 12px;
+  }
+  .setter .sep { font-family: var(--display); font-weight: 800; font-size: 2.4rem; padding-bottom: 8px; }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .presets button {
+    font: inherit; font-weight: 600; color: var(--chalk);
+    background: transparent; border: 2px solid rgba(245,247,255,.5);
+    border-radius: 999px; padding: 8px 16px; cursor: pointer;
+  }
+  .presets button:hover { border-color: var(--chalk); }
+
+  .controls { display: flex; gap: 12px; }
+  .controls button {
+    flex: 1; height: 68px;
+    font-family: var(--display); font-weight: 800; font-size: 1.7rem;
+    border: 0; border-radius: 14px; cursor: pointer;
+  }
+  #start { flex: 2; background: var(--whistle); color: #fff; }
+  #reset { background: var(--court-dark); color: var(--chalk); }
+  body.done #start { background: var(--ink); }
+  body.done #reset { background: var(--chalk); color: var(--ink); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible, input:focus-visible {
+    outline: 3px solid var(--chalk); outline-offset: 3px;
+  }
+
+  .extras { display: flex; justify-content: space-between; align-items: center; font-size: .95rem; gap: 12px; flex-wrap: wrap; }
+  .extras label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .extras input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--whistle); }
+  #test {
+    font: inherit; font-weight: 600; color: var(--chalk); background: none;
+    border: 0; text-decoration: underline; cursor: pointer; padding: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body.done .time { animation: none; }
+    .court .progress { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cronómetro con silbato</h1>
+
+  <div class="court" aria-live="off">
+    <svg viewBox="0 0 200 200" aria-hidden="true">
+      <circle class="track" cx="100" cy="100" r="92"/>
+      <circle class="progress" id="ring" cx="100" cy="100" r="92"/>
+    </svg>
+    <div class="readout">
+      <div class="time" id="time" role="timer">01:00</div>
+      <div class="status" id="status">Listo</div>
+    </div>
+  </div>
+
+  <div class="setter" id="setter">
+    <label>Minutos
+      <input id="min" type="number" inputmode="numeric" min="0" max="999" value="1">
+    </label>
+    <span class="sep">:</span>
+    <label>Segundos
+      <input id="sec" type="number" inputmode="numeric" min="0" max="59" value="0">
+    </label>
+  </div>
+
+  <div class="presets" id="presets">
+    <button type="button" data-s="30">30 s</button>
+    <button type="button" data-s="60">1 min</button>
+    <button type="button" data-s="120">2 min</button>
+    <button type="button" data-s="180">3 min</button>
+    <button type="button" data-s="300">5 min</button>
+    <button type="button" data-s="600">10 min</button>
+  </div>
+
+  <div class="controls">
+    <button id="start" type="button">Empezar</button>
+    <button id="reset" type="button">Reiniciar</button>
+  </div>
+
+  <div class="extras">
+    <label><input type="checkbox" id="repeat"> Repetir al terminar</label>
+    <button id="test" type="button">Probar silbato</button>
+  </div>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var timeEl = $('time'), statusEl = $('status'), ring = $('ring');
+  var minEl = $('min'), secEl = $('sec'), startBtn = $('start'), resetBtn = $('reset');
+  var repeatEl = $('repeat');
+
+  var R = 92, C = 2 * Math.PI * R;
+  ring.style.strokeDasharray = C;
+  ring.style.strokeDashoffset = 0;
+
+  var state = 'idle';           // idle | running | paused | done
+  var totalMs = 60000, remainingMs = 60000, endAt = 0, tick = null, wakeLock = null;
+
+  // ---------- Silbato (sintetizado con Web Audio, no necesita archivos) ----------
+  var ctx = null;
+  function audio() {
+    if (!ctx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  function blast(t0, dur) {
+    var c = ctx;
+    var master = c.createGain();
+    master.gain.setValueAtTime(0.0001, t0);
+    master.gain.exponentialRampToValueAtTime(0.9, t0 + 0.02);
+    master.gain.setValueAtTime(0.9, t0 + dur - 0.05);
+    master.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    master.connect(c.destination);
+
+    // tono agudo con trino rápido (la "bolita" del silbato)
+    var osc = c.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 2850;
+    var lfo = c.createOscillator();
+    lfo.frequency.value = 38;
+    var lfoGain = c.createGain();
+    lfoGain.gain.value = 240;
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+    osc.connect(master);
+
+    // soplido de aire
+    var len = Math.floor(c.sampleRate * dur);
+    var buf = c.createBuffer(1, len, c.sampleRate);
+    var data = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    var noise = c.createBufferSource();
+    noise.buffer = buf;
+    var bp = c.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 3300;
+    bp.Q.value = 1.4;
+    var ng = c.createGain();
+    ng.gain.value = 0.28;
+    noise.connect(bp); bp.connect(ng); ng.connect(master);
+
+    osc.start(t0); lfo.start(t0); noise.start(t0);
+    osc.stop(t0 + dur); lfo.stop(t0 + dur); noise.stop(t0 + dur);
+  }
+
+  // Silbato real: si existe el archivo whistle.mp3 junto al index.html, se usa ese.
+  // Si no está, suena el silbato sintetizado de arriba.
+  var realBuffer = null, realTried = false;
+  function loadReal() {
+    if (realTried || !ctx) return;
+    realTried = true;
+    fetch('whistle.mp3')
+      .then(function (r) { if (!r.ok) throw new Error('sin archivo'); return r.arrayBuffer(); })
+      .then(function (ab) {
+        return new Promise(function (ok, fail) { ctx.decodeAudioData(ab, ok, fail); });
+      })
+      .then(function (b) { realBuffer = b; })
+      .catch(function () { realBuffer = null; });
+  }
+
+  function whistle() {
+    var c = audio();
+    if (!c) return;
+    loadReal();
+    if (realBuffer) {
+      var src = c.createBufferSource();
+      var g = c.createGain();
+      g.gain.value = 1;
+      src.buffer = realBuffer;
+      src.connect(g);
+      g.connect(c.destination);
+      src.start();
+      if (navigator.vibrate) navigator.vibrate([250, 100, 250, 100, 900]);
+      return;
+    }
+    var t = c.currentTime + 0.05;
+    blast(t, 0.25);          // pi
+    blast(t + 0.35, 0.25);   // pi
+    blast(t + 0.70, 0.95);   // piiiiii
+    if (navigator.vibrate) navigator.vibrate([250, 100, 250, 100, 900]);
+  }
+
+  // ---------- Pantalla encendida mientras corre ----------
+  function keepAwake() {
+    try {
+      if ('wakeLock' in navigator) {
+        navigator.wakeLock.request('screen').then(function (l) { wakeLock = l; }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+  function release() {
+    try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && state === 'running') keepAwake();
+  });
+
+  // ---------- Pantalla ----------
+  function fmt(ms) {
+    var s = Math.ceil(ms / 1000);
+    var m = Math.floor(s / 60);
+    var r = s % 60;
+    return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r;
+  }
+
+  function draw() {
+    timeEl.textContent = fmt(remainingMs);
+    var frac = totalMs > 0 ? remainingMs / totalMs : 0;
+    ring.style.strokeDashoffset = C * (1 - frac);
+    document.title = state === 'running' ? fmt(remainingMs) + ' · Cronómetro' : 'Cronómetro con silbato';
+  }
+
+  function readInputs() {
+    var m = Math.max(0, Math.min(999, parseInt(minEl.value, 10) || 0));
+    var s = Math.max(0, Math.min(59, parseInt(secEl.value, 10) || 0));
+    return (m * 60 + s) * 1000;
+  }
+
+  function setInputs(seconds) {
+    minEl.value = Math.floor(seconds / 60);
+    secEl.value = seconds % 60;
+  }
+
+  function setState(s) {
+    state = s;
+    document.body.classList.toggle('done', s === 'done');
+    $('setter').style.opacity = s === 'running' || s === 'paused' ? .4 : 1;
+    minEl.disabled = secEl.disabled = (s === 'running' || s === 'paused');
+    var labels = { idle: 'Empezar', running: 'Pausar', paused: 'Seguir', done: 'Otra vez' };
+    var texts = { idle: 'Listo', running: 'En marcha', paused: 'En pausa', done: '¡Tiempo!' };
+    startBtn.textContent = labels[s];
+    statusEl.textContent = texts[s];
+  }
+
+  // ---------- Lógica ----------
+  function loop() {
+    remainingMs = endAt - Date.now();
+    if (remainingMs <= 0) { finish(); return; }
+    draw();
+  }
+
+  function run() {
+    endAt = Date.now() + remainingMs;
+    clearInterval(tick);
+    tick = setInterval(loop, 100);
+    keepAwake();
+    setState('running');
+    draw();
+  }
+
+  function finish() {
+    clearInterval(tick);
+    remainingMs = 0;
+    draw();
+    release();
+    setState('done');
+    whistle();
+    if (repeatEl.checked) {
+      setTimeout(function () {
+        if (state !== 'done') return;
+        remainingMs = totalMs;
+        run();
+      }, 2200);
+    }
+  }
+
+  function start() {
+    audio(); // desbloquea el sonido con el toque del usuario
+    loadReal(); // deja listo el silbato real antes de que termine el tiempo
+    if (state === 'idle' || state === 'done') {
+      totalMs = readInputs();
+      if (totalMs <= 0) { statusEl.textContent = 'Poné un tiempo'; return; }
+      remainingMs = totalMs;
+      run();
+    } else if (state === 'paused') {
+      run();
+    } else if (state === 'running') {
+      clearInterval(tick);
+      remainingMs = Math.max(0, endAt - Date.now());
+      release();
+      setState('paused');
+      draw();
+    }
+  }
+
+  function reset() {
+    clearInterval(tick);
+    release();
+    totalMs = readInputs() || 60000;
+    remainingMs = totalMs;
+    setState('idle');
+    draw();
+  }
+
+  startBtn.addEventListener('click', start);
+  resetBtn.addEventListener('click', reset);
+  $('test').addEventListener('click', whistle);
+
+  $('presets').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b || state === 'running' || state === 'paused') return;
+    setInputs(parseInt(b.dataset.s, 10));
+    reset();
+  });
+
+  [minEl, secEl].forEach(function (el) {
+    el.addEventListener('input', function () {
+      if (state === 'idle' || state === 'done') {
+        totalMs = remainingMs = readInputs();
+        if (state === 'done') setState('idle');
+        draw();
+      }
+    });
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && !/INPUT|BUTTON/.test(document.activeElement.tagName)) {
+      e.preventDefault(); start();
+    }
+  });
+
+  totalMs = remainingMs = readInputs();
+  setState('idle');
+  draw();
+})();
+</script>
+</body>
+</html>
